@@ -1,0 +1,26 @@
+default:
+  image: archlinux/base
+
+before_script:
+  - pacman -Syu gcc grep cmake boost boost-libs intel-tbb ninja opencv wget --noconfirm
+
+build:
+  stage: build
+  script:
+    - mkdir build/
+    - cd build/
+    - cmake .. -GNinja
+    - cmake --build .
+  artifacts:
+    untracked: true
+
+test:
+  stage: test
+  script:
+    - ./examples/prepare_INRIA_person_dataset.sh
+    - test $(grep 'Bounding box' ./INRIAPerson/Train/annotations/*.txt | wc -l) -eq 1237
+    - ./build/pav1iet ./INRIAPerson/Train-pos.lst -o 'train-%04i.png'
+    - test $(ls train-*.png | wc -l) -eq 1237
+    - test $(grep 'Bounding box' ./INRIAPerson/Test/annotations/*.txt | wc -l) -eq 589
+    - ./build/pav1iet ./INRIAPerson/Test-pos.lst -o 'test-%03i.png'
+    - test $(ls test-*.png | wc -l) -eq 589
