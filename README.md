@@ -45,7 +45,7 @@ listing files to correct location.
 
 ### INRIA Person Dataset
 
-The INRIA person dataset contains a collcetion of upright standing pedestrian
+The INRIA person dataset contains a collection of upright standing pedestrian
 images. The dataset was used to train a human detector using Histogram of
 Oriented Gradients (HOG) features and a linear support vector machine by Dalal &
 Triggs for their 2005 CVPR paper.
