@@ -1,10 +1,19 @@
 default:
   tags:
     - docker
-  image: archlinux/base
+  image: archlinux:base
 
 before_script:
-  - pacman -Syu gcc grep cmake boost boost-libs intel-tbb ninja opencv wget --noconfirm
+  - pacman -Syu --noconfirm
+    boost
+    boost-libs
+    cmake
+    gcc
+    grep
+    intel-tbb
+    ninja
+    opencv
+    wget
 
 build:
   stage: build
