@@ -254,24 +254,51 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
                 }
 
                 // Workout how much padding do we need to add to the original
-                // bounding box such that we obtain the desired padding the
+                // bounding box such that we obtain the desired padding in the
                 // resized image.
                 cv::Size extraPadding2;
                 extraPadding2.width = size.width * padding2.width / windowSize.width;
                 extraPadding2.height = extraPadding2.width * windowSize.height / windowSize.width;
 
-                size += extraPadding2;
+                cv::Size newSize = size + extraPadding2;
 
-                cv::getRectSubPix(image, size, center, patch);
+                int y = static_cast<int>(center.y);
 
-                if (size.area() < windowSize.area()) {
-                    // We are upsampling
-                    cv::resize(patch, patch, windowSize, 0, 0, cv::INTER_CUBIC);
+                int topOverflow = y - newSize.height / 2;
+                int bottomOverflow = image.rows - (y + newSize.height / 2);
+
+                if (topOverflow < 0 || bottomOverflow < 0) {
+                    // Cannot add sufficient vertical padding at the top/bottom
+                    int paddingV = topOverflow < 0
+                                       ? rect.y
+                                       : image.rows - (rect.y + rect.height);
+
+                    newSize.height = size.height + paddingV * 2;
+                    // Account for added vertical padding
+                    newSize.width =
+                        newSize.height * windowSize.width / windowSize.height;
                 }
-                else {
-                    // We are downsampling
-                    cv::resize(patch, patch, windowSize, 0, 0, cv::INTER_AREA);
-                }
+
+                cv::Matx33f scale = cv::Matx33f::eye();
+                scale(0, 0) = static_cast<float>(windowSize.width) /
+                              static_cast<float>(newSize.width);
+                scale(1, 1) = static_cast<float>(windowSize.height) /
+                              static_cast<float>(newSize.height);
+
+                cv::Matx33f translate = cv::Matx33f::eye();
+                translate(0, 2) = -(center.x - static_cast<float>(newSize.width) / 2.0f);
+                translate(1, 2) = -(center.y - static_cast<float>(newSize.height) / 2.0f);
+
+                cv::Matx33f tmp = scale * translate;
+                // Take the two top rows.
+                cv::Mat1f M(2, 3, tmp.val);
+
+                // In case we are downsampling, avoid antialiasing.
+                cv::InterpolationFlags flags =
+                    newSize.area() > windowSize.area() ? cv::INTER_AREA
+                                                       : cv::INTER_CUBIC;
+                cv::warpAffine(image, patch, M, windowSize, flags,
+                               cv::BORDER_REFLECT);
 
                 croppedImages.push_back(std::move(patch));
             }
