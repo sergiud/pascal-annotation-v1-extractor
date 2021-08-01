@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # pav1iet - PASCAL Annotation Version 1.00 Extractor Tool
-# Copyright (C) 2020 Sergiu Deitsch <sergiu.deitsch@gmail.com>
+# Copyright (C) 2020-2021 Sergiu Deitsch <sergiu.deitsch@gmail.com>
 #
 # This file is part of pav1iet.
 #
@@ -33,7 +33,7 @@
 name=INRIAPerson.tar
 URL=${URL:-"ftp://ftp.inrialpes.fr/pub/lear/douze/data/$name"}
 
-{ [[ -s $name ]] && echo $name already downloaded; } || wget $URL
+{ [[ -s $name ]] && echo $name already downloaded; } || wget -nv $URL
 
 dir=${name%.*}
 
