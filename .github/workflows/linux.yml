@@ -46,6 +46,12 @@ jobs:
               --config ${{matrix.build_type}}
     - name: Test
       run: |
+        ! ./build_${{matrix.build_type}}/pav1iet
+        ! ./build_${{matrix.build_type}}/pav1iet does-not-exist
+        ./build_${{matrix.build_type}}/pav1iet -h
+        ./build_${{matrix.build_type}}/pav1iet -v
+        ! ./build_${{matrix.build_type}}/pav1iet <(echo invalid annotations)
+        ! echo invalid input | ./build_${{matrix.build_type}}/pav1iet -
         ./examples/prepare_INRIA_person_dataset.sh
         test $(grep 'Bounding box' ./INRIAPerson/Train/annotations/*.txt | wc -l) -eq 1237
         ./build_${{matrix.build_type}}/pav1iet ./INRIAPerson/Train-pos.lst -o 'train-%04i.png'

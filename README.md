@@ -2,7 +2,6 @@
 
 ![Linux](https://github.com/sergiud/pascal-annotation-v1-extractor/actions/workflows/linux.yml/badge.svg)
 [![codecov](https://codecov.io/gh/sergiud/pascal-annotation-v1-extractor/branch/master/graph/badge.svg?token=2IPA82GA48)](https://codecov.io/gh/sergiud/pascal-annotation-v1-extractor)
-[![coveralls](https://coveralls.io/repos/github/sergiud/pascal-annotation-v1-extractor/badge.svg?branch=master)](https://coveralls.io/github/sergiud/pascal-annotation-v1-extractor?branch=master)
 
 This repository contains a tool for parsing files in the PASCAL Annotation
 Version 1.00 format and the extraction of annotated image regions into separate

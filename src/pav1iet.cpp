@@ -1,6 +1,6 @@
 //
 // pav1iet - PASCAL Annotation Version 1.00 Extractor Tool
-// Copyright (C) 2020 Sergiu Deitsch <sergiu.deitsch@gmail.com>
+// Copyright (C) 2020-2021 Sergiu Deitsch <sergiu.deitsch@gmail.com>
 //
 // This file is part of pav1iet.
 //
@@ -53,7 +53,7 @@ namespace {
 
 constexpr const char* const banner =
     "PASCAL Annotation Version 1.00 Image Extraction Tool\n"
-    "Copyright (C) 2020 Sergiu Deitsch\n"
+    "Copyright (C) 2021 Sergiu Deitsch\n"
     ;
 
 void usage(const boost::program_options::options_description& desc)
@@ -413,7 +413,7 @@ int main(int argc, char** argv)
     boost::filesystem::ifstream in{fileName};
 
     if (!in) {
-        std::cerr << "error: failed to open " << fileName;
+        std::cerr << "error: failed to open " << fileName << std::endl;
         return EXIT_FAILURE;
     }
 
