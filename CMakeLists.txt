@@ -16,7 +16,7 @@ find_package (Boost 1.70 REQUIRED COMPONENTS
   NO_MODULE
 )
 find_package (OpenCV 4.0 REQUIRED)
-find_package (TBB 2020 REQUIRED NO_MODULE)
+find_package (TBB 2021.4 REQUIRED NO_MODULE)
 
 add_executable (pav1iet
   src/adapted.hpp

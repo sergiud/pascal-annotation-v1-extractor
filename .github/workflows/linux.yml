@@ -5,14 +5,14 @@ on: [push, pull_request]
 jobs:
   build:
     name: GCC-${{matrix.build_type}}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: true
       matrix:
           build_type: [Release, Debug]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Setup Dependencies
       shell: bash

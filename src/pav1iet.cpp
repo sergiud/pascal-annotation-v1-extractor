@@ -45,7 +45,7 @@
 #include <boost/thread/interruption.hpp>
 #include <boost/thread/thread.hpp>
 
-#include <tbb/pipeline.h>
+#include <tbb/parallel_pipeline.h>
 
 #include "grammar.hpp"
 
@@ -126,7 +126,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
 
     const auto readFileName = tbb::make_filter<void, boost::filesystem::path>
     (
-        tbb::filter::serial_out_of_order,
+        tbb::filter_mode::serial_out_of_order,
         [&t, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
         {
             std::string fileName;
@@ -150,7 +150,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
     // Read in the annotations
     const auto loadAnnotations = tbb::make_filter<boost::filesystem::path, std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations> >
     (
-        tbb::filter::serial_out_of_order,
+        tbb::filter_mode::serial_out_of_order,
         [] (const boost::filesystem::path& fileName)
         {
             namespace x3 = boost::spirit::x3;
@@ -186,7 +186,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         , std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>
     >
     (
-        tbb::filter::serial_out_of_order,
+        tbb::filter_mode::serial_out_of_order,
         [&numObjects, directory] (const std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations>& t)
         {
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
@@ -210,7 +210,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         , std::vector<cv::Mat>
     >
     (
-        tbb::filter::parallel,
+        tbb::filter_mode::parallel,
         [&numProcessedFiles] (const std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>& t)
         {
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
@@ -328,7 +328,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         , void
     >
     (
-        tbb::filter::serial_in_order,
+        tbb::filter_mode::serial_in_order,
         [&numWrittenImages, &outFileNameFmt] (const std::vector<cv::Mat>& croppedImages)
         {
             for (const cv::Mat& image : croppedImages) {
