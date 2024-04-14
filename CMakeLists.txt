@@ -9,7 +9,7 @@ find_package (Boost 1.70 REQUIRED COMPONENTS
   program_options
   NO_MODULE
 )
-find_package (OpenCV 4.0 REQUIRED)
+find_package (OpenCV 4.0 REQUIRED imgproc imgcodecs)
 find_package (TBB 2021.4 REQUIRED NO_MODULE)
 
 add_executable (pav1iet

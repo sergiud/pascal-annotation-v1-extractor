@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <stop_token>
@@ -103,8 +104,6 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
             }
             BOOST_SCOPE_EXIT_END
 
-            boost::format fmt("processed %1% out of %2% annotations (%4% objects) (%3%%% done)");
-
             using namespace std::chrono_literals;
 
             // Wait until the first line in the annotations listing has been
@@ -118,7 +117,12 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                 const std::size_t total = numTotalFiles.load(std::memory_order_relaxed);
                 const std::size_t percent = processed * 100 / total;
 
-                std::clog << '\r' << fmt % processed % total % percent % numObjects.load(std::memory_order_relaxed);
+                std::clog << '\r';
+                std::clog << std::format(
+                    "processed {0} out of {1} annotations ({3} objects) ({2}% "
+                    "done)",
+                    processed, total, percent,
+                    numObjects.load(std::memory_order_relaxed));
                 std::this_thread::sleep_for(500ms);
 
                 if (percent >= 100) {
@@ -315,17 +319,17 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     );
 
     boost::format outFileNameFmt;
-    boost::format tmp{outBaseFileName.string()};
 
-    if (tmp.expected_args() == 0) {
+    if (boost::format tmp{outBaseFileName.string()}; tmp.expected_args() == 0) {
         outFileNameFmt = boost::format{outBaseFileName.string() + "%1%.png"};
     }
     else if (tmp.expected_args() > 1) {
         std::cerr << "error: output file name format must contain exactly one placeholder" << std::endl;
         return EXIT_FAILURE;
     }
-    else
-        outFileNameFmt = tmp;
+    else {
+        outFileNameFmt = std::move(tmp);
+    }
 
     const auto writePatches = tbb::make_filter
     <
@@ -367,8 +371,12 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     if (numWrittenImages > 0) {
         const std::filesystem::path tmp = outBaseFileName.parent_path();
 
-        std::clog << boost::format("wrote %1% images to %2%") % numWrittenImages %
-            (tmp.empty() ? std::filesystem::current_path() : tmp) << std::endl;
+        std::clog << std::format(
+                         "wrote {} images to {}",
+                         numWrittenImages.load(std::memory_order_relaxed),
+                         (tmp.empty() ? std::filesystem::current_path() : tmp)
+                             .string())
+                  << std::endl;
     }
 
     if (in.bad()) {
