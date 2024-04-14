@@ -10,10 +10,10 @@ image files.
 
 ## Motivation
 
-This tool was created for evaluating an R-HOG implementation based on integral
-histograms by recreating the experiments performed by the authors of the
-Histogram of Oriented Gradients (HOG) feature descriptor on the [INRIA person
-dataset](#inria-person-dataset) (see below).
+This tool was created for evaluating [hogpp](https://github.com/sergiud/hogpp)
+which implements R-HOG using integral histograms to recreate the experiments
+performed by the authors of the Histogram of Oriented Gradients (HOG) feature
+descriptor on the [INRIA person dataset](#inria-person-dataset) (see below).
 
 
 ## Requirements
