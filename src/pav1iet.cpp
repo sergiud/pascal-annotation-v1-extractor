@@ -201,7 +201,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
             const std::filesystem::path imageFileName = directory / annotations.imageFileName;
 
-            cv::Mat image = cv::imread(imageFileName.string());
+            cv::Mat image = cv::imread(imageFileName);
 
             if (image.empty()) {
                 throw std::invalid_argument{"failed to read image " + imageFileName.string()};
