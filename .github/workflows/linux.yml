@@ -73,10 +73,3 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         verbose: true
-
-    - name: Upload Coverage to Coveralls
-      if: ${{ startswith(matrix.build_type, 'Debug') }}
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: ./coverage.info
