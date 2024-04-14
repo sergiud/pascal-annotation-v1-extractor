@@ -35,8 +35,8 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <filesystem>
 
-#include <boost/filesystem/path.hpp>
 #include <boost/fusion/adapted/std_tuple.hpp>
 #include <boost/spirit/home/x3.hpp>
 
@@ -57,7 +57,7 @@ struct Object
 
 struct Annotations
 {
-    boost::filesystem::path imageFileName;
+    std::filesystem::path imageFileName;
     cv::Size imageSize;
     int channels;
     std::string database;

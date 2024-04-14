@@ -1,6 +1,6 @@
 //
 // pav1iet - PASCAL Annotation Version 1.00 Extractor Tool
-// Copyright (C) 2020-2021 Sergiu Deitsch <sergiu.deitsch@gmail.com>
+// Copyright (C) 2024 Sergiu Deitsch <sergiu.deitsch@gmail.com>
 //
 // This file is part of pav1iet.
 //
@@ -21,20 +21,21 @@
 #include <opencv2/imgcodecs/imgcodecs.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <stop_token>
+#include <thread>
 #include <tuple>
 
 // Enable for debugging purposes
 // #define BOOST_SPIRIT_X3_DEBUG
 #define BOOST_SPIRIT_X3_UNICODE
 
-#include <boost/atomic/atomic.hpp>
-#include <boost/chrono.hpp>
-#include <boost/filesystem/fstream.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
 #include <boost/format.hpp>
 #include <boost/fusion/adapted/std_tuple.hpp>
 #include <boost/program_options.hpp>
@@ -42,8 +43,6 @@
 #include <boost/spirit/home/support/iterators/istream_iterator.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/utility/utf8.hpp>
-#include <boost/thread/interruption.hpp>
-#include <boost/thread/thread.hpp>
 
 #include <tbb/parallel_pipeline.h>
 
@@ -53,7 +52,7 @@ namespace {
 
 constexpr const char* const banner =
     "PASCAL Annotation Version 1.00 Image Extraction Tool\n"
-    "Copyright (C) 2021 Sergiu Deitsch\n"
+    "Copyright (C) 2024 Sergiu Deitsch\n"
     ;
 
 void usage(const boost::program_options::options_description& desc)
@@ -83,20 +82,20 @@ void version()
     std::cout << banner;
 }
 
-int processListing(std::istream& in, const boost::filesystem::path& directory,
-                   const boost::filesystem::path& outBaseFileName)
+int processListing(std::istream& in, const std::filesystem::path& directory,
+                   const std::filesystem::path& outBaseFileName)
 {
-    boost::atomic_size_t emptyDescCount{0};
-    boost::atomic_size_t failCount{0};
-    boost::atomic_size_t numProcessedFiles{0};
-    boost::atomic_size_t numTotalFiles{0};
-    boost::atomic_size_t numObjects{0};
-    boost::atomic_size_t numWrittenImages{0};
+    std::atomic_size_t emptyDescCount{0};
+    std::atomic_size_t failCount{0};
+    std::atomic_size_t numProcessedFiles{0};
+    std::atomic_size_t numTotalFiles{0};
+    std::atomic_size_t numObjects{0};
+    std::atomic_size_t numWrittenImages{0};
 
     // Progress report thread
-    boost::thread t
+    std::jthread t
     (
-        [&numProcessedFiles, &numTotalFiles, &numObjects]
+        [&numProcessedFiles, &numTotalFiles, &numObjects] (std::stop_token token)
         {
             BOOST_SCOPE_EXIT(void)
             {
@@ -106,16 +105,21 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
 
             boost::format fmt("processed %1% out of %2% annotations (%4% objects) (%3%%% done)");
 
+            using namespace std::chrono_literals;
+
             // Wait until the first line in the annotations listing has been
             // read.
-            while (numTotalFiles == 0) {
-                boost::this_thread::sleep_for(boost::chrono::milliseconds(500));
+            while (numTotalFiles.load(std::memory_order_relaxed) == 0) {
+                std::this_thread::sleep_for(500ms);
             }
 
-            while (!boost::this_thread::interruption_requested()) {
-                std::size_t percent = numProcessedFiles * 100 / numTotalFiles;
-                std::clog << '\r' << fmt % numProcessedFiles % numTotalFiles % percent % numObjects;
-                boost::this_thread::sleep_for(boost::chrono::milliseconds(500));
+            while (!token.stop_requested()) {
+                const std::size_t processed = numProcessedFiles.load(std::memory_order_relaxed);
+                const std::size_t total = numTotalFiles.load(std::memory_order_relaxed);
+                const std::size_t percent = processed * 100 / total;
+
+                std::clog << '\r' << fmt % processed % total % percent % numObjects.load(std::memory_order_relaxed);
+                std::this_thread::sleep_for(500ms);
 
                 if (percent >= 100) {
                     break;
@@ -124,7 +128,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         }
     );
 
-    const auto readFileName = tbb::make_filter<void, boost::filesystem::path>
+    const auto readFileName = tbb::make_filter<void, std::filesystem::path>
     (
         tbb::filter_mode::serial_out_of_order,
         [&t, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
@@ -134,28 +138,29 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
             if (!std::getline(in, fileName)) {
                 fc.stop();
 
-                if (numTotalFiles == 0) {
+                if (numTotalFiles.load(std::memory_order_relaxed) == 0) {
                     // In case no files could be read, directly notify the progress
                     // report thread to avoid a dead lock.
-                    t.interrupt();
+                    t.request_stop();
                 }
             }
-            else
-                ++numTotalFiles;
+            else {
+                numTotalFiles.fetch_add(1, std::memory_order_relaxed);
+            }
 
             return directory / fileName;
         }
     );
 
     // Read in the annotations
-    const auto loadAnnotations = tbb::make_filter<boost::filesystem::path, std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations> >
+    const auto loadAnnotations = tbb::make_filter<std::filesystem::path, std::tuple<std::filesystem::path, pascal_v1::ast::Annotations> >
     (
         tbb::filter_mode::serial_out_of_order,
-        [] (const boost::filesystem::path& fileName)
+        [] (const std::filesystem::path& fileName)
         {
             namespace x3 = boost::spirit::x3;
 
-            boost::filesystem::ifstream in{fileName};
+            std::ifstream in{fileName};
             in.unsetf(std::ios_base::skipws);
 
             pascal_v1::ast::Annotations annotations;
@@ -182,15 +187,15 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
     // Load images
     const auto loadImages = tbb::make_filter
     <
-          std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations>
-        , std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>
+          std::tuple<std::filesystem::path, pascal_v1::ast::Annotations>
+        , std::tuple<std::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>
     >
     (
         tbb::filter_mode::serial_out_of_order,
-        [&numObjects, directory] (const std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations>& t)
+        [&numObjects, directory] (const std::tuple<std::filesystem::path, pascal_v1::ast::Annotations>& t)
         {
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
-            const boost::filesystem::path imageFileName = directory / annotations.imageFileName;
+            const std::filesystem::path imageFileName = directory / annotations.imageFileName;
 
             cv::Mat image = cv::imread(imageFileName.string());
 
@@ -198,7 +203,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
                 throw std::invalid_argument{"failed to read image " + imageFileName.string()};
             }
 
-            numObjects += annotations.objects.size();
+            numObjects.fetch_add(annotations.objects.size(), std::memory_order_relaxed);
 
             return std::tuple_cat(t, std::make_tuple(image));
         }
@@ -206,12 +211,12 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
 
     const auto processObjects = tbb::make_filter
     <
-          std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>
+          std::tuple<std::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>
         , std::vector<cv::Mat>
     >
     (
         tbb::filter_mode::parallel,
-        [&numProcessedFiles] (const std::tuple<boost::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>& t)
+        [&numProcessedFiles] (const std::tuple<std::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>& t)
         {
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
             const cv::Mat& image = std::get<cv::Mat>(t);
@@ -303,7 +308,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
                 croppedImages.push_back(std::move(patch));
             }
 
-            ++numProcessedFiles;
+            numProcessedFiles.fetch_add(1, std::memory_order_relaxed);
 
             return croppedImages;
         }
@@ -332,7 +337,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         [&numWrittenImages, &outFileNameFmt] (const std::vector<cv::Mat>& croppedImages)
         {
             for (const cv::Mat& image : croppedImages) {
-                cv::imwrite(str(outFileNameFmt % numWrittenImages++), image);
+                cv::imwrite(str(outFileNameFmt % numWrittenImages.fetch_add(1, std::memory_order_relaxed)), image);
             }
         }
     );
@@ -340,7 +345,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
     try {
         tbb::parallel_pipeline
         (
-              boost::thread::hardware_concurrency()
+              std::thread::hardware_concurrency()
             , readFileName
             & loadAnnotations
             & loadImages
@@ -352,7 +357,7 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
         t.join();
     }
     catch (const std::exception& e) {
-        t.interrupt();
+        t.request_stop();
         t.join();
 
         std::cerr << "error: " << e.what() << std::endl;
@@ -360,10 +365,10 @@ int processListing(std::istream& in, const boost::filesystem::path& directory,
     }
 
     if (numWrittenImages > 0) {
-        const boost::filesystem::path tmp = outBaseFileName.parent_path();
+        const std::filesystem::path tmp = outBaseFileName.parent_path();
 
         std::clog << boost::format("wrote %1% images to %2%") % numWrittenImages %
-            (tmp.empty() ? boost::filesystem::current_path() : tmp) << std::endl;
+            (tmp.empty() ? std::filesystem::current_path() : tmp) << std::endl;
     }
 
     if (in.bad()) {
@@ -386,8 +391,8 @@ int main(int argc, char** argv)
 
     po::options_description opts{"available options"};
 
-    boost::filesystem::path fileName;
-    boost::filesystem::path outBaseFileName;
+    std::filesystem::path fileName;
+    std::filesystem::path outBaseFileName;
 
     opts.add_options()
         ("input,i", (po::value(&fileName))->value_name("<file>"), "annotations list file name")
@@ -430,14 +435,14 @@ int main(int argc, char** argv)
         }
 
         // Read from stdin
-        return processListing(std::cin, boost::filesystem::current_path(), outBaseFileName);
+        return processListing(std::cin, std::filesystem::current_path(), outBaseFileName);
     }
 
     if (outBaseFileName.empty()) {
         outBaseFileName = fileName.filename().replace_extension();
     }
 
-    boost::filesystem::ifstream in{fileName};
+    std::ifstream in{fileName};
 
     if (!in) {
         std::cerr << "error: failed to open " << fileName << std::endl;

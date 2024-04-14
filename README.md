@@ -18,7 +18,7 @@ descriptor on the [INRIA person dataset](#inria-person-dataset) (see below).
 
 ## Requirements
 
-* C++14 compiler
+* C++20 compiler
 * CMake 3.5
 * Boost 1.70
 * OpenCV 4.0

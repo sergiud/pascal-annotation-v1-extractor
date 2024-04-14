@@ -5,14 +5,8 @@ project (pav1iet
   LANGUAGES CXX
 )
 
-set (CMAKE_CXX_STANDARD 14)
-set (CMAKE_CXX_STANDARD_REQUIRED ON)
-
 find_package (Boost 1.70 REQUIRED COMPONENTS
-  chrono
-  filesystem
   program_options
-  thread
   NO_MODULE
 )
 find_package (OpenCV 4.0 REQUIRED)
@@ -24,12 +18,11 @@ add_executable (pav1iet
   src/pav1iet.cpp
 )
 
+target_compile_features (pav1iet PRIVATE cxx_std_20)
+
 target_link_libraries (pav1iet PRIVATE
   Boost::boost
-  Boost::chrono
-  Boost::filesystem
   Boost::program_options
-  Boost::thread
   opencv_imgproc
   opencv_imgcodecs
   TBB::tbb
