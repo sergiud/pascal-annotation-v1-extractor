@@ -15,7 +15,6 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Setup Dependencies
-      shell: bash
       run: |
         sudo apt-get update
         DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
@@ -29,21 +28,30 @@ jobs:
           libboost-thread-dev \
           libopencv-dev \
           libtbb-dev \
-          lcov \
           ninja-build \
           wget
 
-    - name: Configure
-      shell: bash
+    - name: Setup Coverage Dependencies
+      if: ${{matrix.build_type == 'Debug'}}
       run: |
-        if [[ ${{matrix.build_type}} == "Debug" ]]; then
-          export CXXFLAGS=--coverage
-        fi
+        DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
+          python3-pip
+        pip install 'gcovr==7.2'
+
+    - name: Setup Debug Environment
+      if: ${{matrix.build_type == 'Debug'}}
+      run: |
+        echo 'CXXFLAGS=--coverage' >> $GITHUB_ENV
+
+    - name: Configure
+      run: |
         cmake -S . -B build_${{matrix.build_type}} -G Ninja
+
     - name: Build
       run: |
         cmake --build build_${{matrix.build_type}} \
               --config ${{matrix.build_type}}
+
     - name: Test
       run: |
         ! ./build_${{matrix.build_type}}/pav1iet
@@ -59,12 +67,12 @@ jobs:
         test $(grep 'Bounding box' ./INRIAPerson/Test/annotations/*.txt | wc -l) -eq 589
         ./build_${{matrix.build_type}}/pav1iet ./INRIAPerson/Test-pos.lst -o 'test-%03i.png'
         test $(ls test-*.png | wc -l) -eq 589
-    - name: Generate Covarage
-      if: ${{ startswith(matrix.build_type, 'Debug') }}
+
+    - name: Generate Coverage
+      if: matrix.build_type == 'Debug'
       run: |
-        lcov --directory . --capture --output-file coverage.info
-        lcov --remove coverage.info 'test/*' '/usr/*' --output-file coverage.info
-        lcov --list coverage.info
+        cd build_${{matrix.build_type}}
+        gcovr -r .. . -s --cobertura coverage.xml
 
     - name: Upload Coverage to Codecov
       if: ${{ startswith(matrix.build_type, 'Debug') }}

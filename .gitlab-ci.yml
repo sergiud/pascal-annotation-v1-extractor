@@ -46,10 +46,8 @@ test:
     - cd build/
     - mkdir coverage/
     - gcovr -r ..
-      -j$(nproc)
       -s
-      --filter ../src
-      --html --html-title pav1iet --html-details
+      --html --html-details
       -o coverage/report.html
   coverage: '/lines:\s+(\d+\.\d+|\d+)%/'
   artifacts:
