@@ -338,10 +338,12 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     >
     (
         tbb::filter_mode::serial_in_order,
-        [&numWrittenImages, &outFileNameFmt] (const std::vector<cv::Mat>& croppedImages)
+        [&numWrittenImages, outFileNameFmt] (const std::vector<cv::Mat>& croppedImages)
         {
+            boost::format fmt = outFileNameFmt;
+
             for (const cv::Mat& image : croppedImages) {
-                cv::imwrite(str(outFileNameFmt % numWrittenImages.fetch_add(1, std::memory_order_relaxed)), image);
+                cv::imwrite(str(fmt % numWrittenImages.fetch_add(1, std::memory_order_relaxed)), image);
             }
         }
     );
