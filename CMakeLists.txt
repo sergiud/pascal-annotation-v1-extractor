@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.5)
+cmake_minimum_required (VERSION 3.16)
 project (pav1iet
   VERSION 0.1
   DESCRIPTION "PASCAL Annotation Version 1.00 Image Extraction Tool"
