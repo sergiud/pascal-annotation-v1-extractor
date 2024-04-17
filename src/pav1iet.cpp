@@ -24,11 +24,13 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <stop_token>
 #include <thread>
 #include <tuple>
@@ -92,11 +94,13 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     std::atomic_size_t numTotalFiles{0};
     std::atomic_size_t numObjects{0};
     std::atomic_size_t numWrittenImages{0};
+    std::condition_variable_any update;
+    std::mutex updateMonitor;
 
     // Progress report thread
     std::jthread t
     (
-        [&numProcessedFiles, &numTotalFiles, &numObjects] (std::stop_token token)
+        [&numProcessedFiles, &numTotalFiles, &numObjects, &update, &updateMonitor] (std::stop_token token)
         {
             BOOST_SCOPE_EXIT(void)
             {
@@ -104,12 +108,13 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
             }
             BOOST_SCOPE_EXIT_END
 
-            using namespace std::chrono_literals;
-
-            // Wait until the first line in the annotations listing has been
-            // read.
-            while (numTotalFiles.load(std::memory_order_relaxed) == 0) {
-                std::this_thread::sleep_for(500ms);
+            {
+                // Wait until the first line in the annotations listing has been
+                // read.
+                std::unique_lock lock{updateMonitor};
+                update.wait(lock, token, [&numTotalFiles] {
+                    return numTotalFiles.load(std::memory_order_relaxed) != 0;
+                });
             }
 
             while (!token.stop_requested()) {
@@ -123,10 +128,22 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                     "done)",
                     processed, total, percent,
                     numObjects.load(std::memory_order_relaxed));
-                std::this_thread::sleep_for(500ms);
 
                 if (percent >= 100) {
                     break;
+                }
+
+                {
+                    using namespace std::chrono_literals;
+                    constexpr auto UpdateInterval = 500ms;
+
+                    // Reduce the update rate
+                    std::unique_lock lock{updateMonitor};
+                    update.wait_for(
+                        lock, token, UpdateInterval, [processed, &numProcessedFiles] {
+                            return processed != numProcessedFiles.load(
+                                                    std::memory_order_relaxed);
+                        });
                 }
             }
         }
@@ -135,7 +152,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     const auto readFileName = tbb::make_filter<void, std::filesystem::path>
     (
         tbb::filter_mode::serial_out_of_order,
-        [&t, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
+        [&t, &update, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
         {
             std::string fileName;
 
@@ -149,7 +166,10 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                 }
             }
             else {
-                numTotalFiles.fetch_add(1, std::memory_order_relaxed);
+                if (numTotalFiles.fetch_add(1, std::memory_order_relaxed) == 0) {
+                    // Start updating the progress
+                    update.notify_one();
+                }
             }
 
             return directory / fileName;
