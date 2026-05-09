@@ -1,6 +1,6 @@
 //
 // pav1iet - PASCAL Annotation Version 1.00 Extractor Tool
-// Copyright (C) 2024 Sergiu Deitsch <sergiu.deitsch@gmail.com>
+// Copyright (C) 2026 Sergiu Deitsch <sergiu.deitsch@gmail.com>
 //
 // This file is part of pav1iet.
 //
@@ -55,7 +55,7 @@ namespace {
 
 constexpr const char* const banner =
     "PASCAL Annotation Version 1.00 Image Extraction Tool\n"
-    "Copyright (C) 2024 Sergiu Deitsch\n"
+    "Copyright (C) 2026 Sergiu Deitsch\n"
     ;
 
 void usage(const boost::program_options::options_description& desc)
@@ -152,7 +152,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     const auto readFileName = tbb::make_filter<void, std::filesystem::path>
     (
         tbb::filter_mode::serial_out_of_order,
-        [&t, &update, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
+        [source = t.get_stop_source(), &update, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
         {
             std::string fileName;
 
@@ -162,7 +162,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                 if (numTotalFiles.load(std::memory_order_relaxed) == 0) {
                     // In case no files could be read, directly notify the progress
                     // report thread to avoid a dead lock.
-                    t.request_stop();
+                    source.request_stop();
                 }
             }
             else {
