@@ -390,7 +390,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
         return EXIT_FAILURE;
     }
 
-    if (numWrittenImages > 0) {
+    if (numWrittenImages.load(std::memory_order_relaxed) > 0) {
         const std::filesystem::path tmp = outBaseFileName.parent_path();
 
         std::clog << std::format(
