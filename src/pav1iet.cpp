@@ -118,7 +118,10 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
             }
 
             while (!token.stop_requested()) {
-                const std::size_t processed = numProcessedFiles.load(std::memory_order_relaxed);
+                // The acquire load of processed synchronizes with the mutex
+                // unlock in processObjects, making numTotalFiles >=
+                // numProcessedFiles visible by the time total is read.
+                const std::size_t processed = numProcessedFiles.load(std::memory_order_acquire);
                 const std::size_t total = numTotalFiles.load(std::memory_order_relaxed);
                 const std::size_t percent = processed * 100 / total;
 
@@ -152,7 +155,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     const auto readFileName = tbb::make_filter<void, std::filesystem::path>
     (
         tbb::filter_mode::serial_out_of_order,
-        [source = t.get_stop_source(), &update, &in, &numTotalFiles, directory] (tbb::flow_control& fc)
+        [source = t.get_stop_source(), &update, &in, &numTotalFiles, directory, &updateMonitor] (tbb::flow_control& fc)
         {
             std::string fileName;
 
@@ -166,10 +169,17 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                 }
             }
             else {
-                if (numTotalFiles.fetch_add(1, std::memory_order_relaxed) == 0) {
-                    // Start updating the progress
-                    update.notify_one();
-                }
+              const bool start = [&numTotalFiles, &updateMonitor] {
+                // Ensure to update numTotalFiles to avoid lost notification
+                std::scoped_lock lock{updateMonitor};
+                return numTotalFiles.fetch_add(1, std::memory_order_relaxed) ==
+                       0;
+              }();
+
+              if (start) {
+                // Start updating the progress
+                update.notify_one();
+              }
             }
 
             return directory / fileName;
@@ -240,7 +250,7 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
     >
     (
         tbb::filter_mode::parallel,
-        [&numProcessedFiles] (const std::tuple<std::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>& t)
+        [&numProcessedFiles, &update, &updateMonitor] (const std::tuple<std::filesystem::path, pascal_v1::ast::Annotations, cv::Mat>& t)
         {
             const auto& annotations = std::get<pascal_v1::ast::Annotations>(t);
             const cv::Mat& image = std::get<cv::Mat>(t);
@@ -332,7 +342,12 @@ int processListing(std::istream& in, const std::filesystem::path& directory,
                 croppedImages.push_back(std::move(patch));
             }
 
-            numProcessedFiles.fetch_add(1, std::memory_order_relaxed);
+            {
+                std::scoped_lock lock{updateMonitor};
+                numProcessedFiles.fetch_add(1, std::memory_order_relaxed);
+            }
+
+            // Update notifying update to limit the update rate
 
             return croppedImages;
         }
